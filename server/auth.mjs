@@ -49,9 +49,8 @@ export function installAuth(app, { store, config, sessionCookie, getUser, verify
     const name = typeof req.body.name === 'string' ? req.body.name.trim().slice(0, 40) : '';
     if (!name) return res.status(400).json({ error: 'ใส่ชื่อที่อยากให้เพื่อนร่วมงานเห็นก่อนครับ' });
     try {
-      const existing = await store.demoIdentity(name);
       const member = await store.upsertMember({
-        identity: existing?.identity ?? `demo:${randomUUID()}`,
+        identity: `demo:${randomUUID()}`,
         name,
         email: '',
         maxMembers: config.maxMembers,
@@ -76,7 +75,7 @@ export function installAuth(app, { store, config, sessionCookie, getUser, verify
       res.cookie('office_oauth', state, {
         httpOnly: true,
         sameSite: 'lax',
-        secure: !config.demo && config.origin.startsWith('https:'),
+        secure: config.origin.startsWith('https:'),
         path: '/api/auth',
         maxAge: 10 * 60_000,
       });

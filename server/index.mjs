@@ -15,6 +15,11 @@ if (existsSync('.env')) process.loadEnvFile('.env');
 const production = process.argv.includes('--production');
 const number = (key, fallback, max) =>
   Math.max(1, Math.min(max, Number.parseInt(process.env[key] ?? String(fallback), 10) || fallback));
+const oidcConfigured =
+  (!!process.env.GOOGLE_CLIENT_ID && !!process.env.GOOGLE_CLIENT_SECRET) ||
+  (!!process.env.MICROSOFT_TENANT_ID &&
+    !!process.env.MICROSOFT_CLIENT_ID &&
+    !!process.env.MICROSOFT_CLIENT_SECRET);
 const parseOrigin = (value, key) => {
   try {
     const origin = new URL(value);
@@ -39,7 +44,7 @@ const config = {
   origin: parseOrigin(process.env.PUBLIC_ORIGIN ?? 'http://localhost:5173', 'PUBLIC_ORIGIN'),
   officeName: process.env.OFFICE_NAME ?? 'Assemble HQ',
   orgName: process.env.ORG_NAME ?? 'Assemble',
-  demo: !production && (process.env.AUTH_MODE ?? 'demo') === 'demo',
+  demo: process.env.AUTH_MODE === 'demo' || !oidcConfigured,
   domains: (process.env.ALLOWED_DOMAINS ?? '')
     .toLowerCase()
     .split(',')
@@ -64,15 +69,10 @@ const wsUrl = new URL('/ws', wsOrigin);
 wsUrl.protocol = wsUrl.protocol === 'https:' ? 'wss:' : 'ws:';
 config.wsUrl = wsUrl.href;
 
-const oidcConfigured =
-  (!!process.env.GOOGLE_CLIENT_ID && !!process.env.GOOGLE_CLIENT_SECRET) ||
-  (!!process.env.MICROSOFT_TENANT_ID &&
-    !!process.env.MICROSOFT_CLIENT_ID &&
-    !!process.env.MICROSOFT_CLIENT_SECRET);
-
 const localHosts = new Set(['localhost', '127.0.0.1', '[::1]']);
 if (
   config.demo &&
+  !production &&
   (!['127.0.0.1', 'localhost', '::1'].includes(config.host) ||
     !localHosts.has(new URL(config.origin).hostname))
 )
@@ -80,9 +80,8 @@ if (
 if (
   production &&
   (!process.env.DATABASE_URL ||
-    !config.domains.length ||
-    process.env.AUTH_MODE !== 'oidc' ||
-    !oidcConfigured ||
+    (!config.demo &&
+      (!config.domains.length || process.env.AUTH_MODE !== 'oidc' || !oidcConfigured)) ||
     !process.env.SESSION_SECRET ||
     process.env.SESSION_SECRET.length < 32 ||
     !config.origin.startsWith('https:') ||
@@ -90,7 +89,7 @@ if (
     !wsOrigin.startsWith('https:'))
 )
   throw new Error(
-    'Production ต้องกำหนด DATABASE_URL, HTTPS PUBLIC_ORIGIN, HTTPS WS_PUBLIC_ORIGIN, ALLOWED_DOMAINS, SESSION_SECRET อย่างน้อย 32 ตัวอักษร และตั้ง AUTH_MODE=oidc พร้อมค่า OIDC provider ให้ครบ',
+    'Production ต้องกำหนด DATABASE_URL, HTTPS PUBLIC_ORIGIN, HTTPS WS_PUBLIC_ORIGIN, SESSION_SECRET อย่างน้อย 32 ตัวอักษร และตั้งค่า OIDC ให้ครบเมื่อเปิดใช้บัญชีบริษัท',
   );
 
 const secret = process.env.SESSION_SECRET || randomBytes(32).toString('hex');

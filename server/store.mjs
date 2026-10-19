@@ -67,15 +67,6 @@ export function createStore(connectionString, retentionDays = 30) {
     member(id) {
       return memberCache.get(id) ?? null;
     },
-    async demoIdentity(name) {
-      const rows = await db.unsafe(
-        "SELECT identity,name,role FROM assemble.members WHERE identity LIKE 'demo:%' ORDER BY created_at",
-      );
-      return rows.find(
-        (member) =>
-          member.name.normalize('NFKC').toLowerCase() === name.normalize('NFKC').toLowerCase(),
-      );
-    },
     async upsertMember({ identity, name, email = '', maxMembers = 50 }) {
       const row = await db.begin(async (tx) => {
         // Serialize first-login and capacity checks across concurrent OIDC callbacks.
