@@ -70,13 +70,14 @@ wsUrl.protocol = wsUrl.protocol === 'https:' ? 'wss:' : 'ws:';
 config.wsUrl = wsUrl.href;
 
 const localHosts = new Set(['localhost', '127.0.0.1', '[::1]']);
+const localOrigin = localHosts.has(new URL(config.origin).hostname);
 if (
   config.demo &&
   !production &&
   (!['127.0.0.1', 'localhost', '::1'].includes(config.host) ||
-    !localHosts.has(new URL(config.origin).hostname))
+    (!localOrigin && !config.origin.startsWith('https:')))
 )
-  throw new Error('โหมดเดโมเปิดได้เฉพาะเว็บไซต์บนเครื่องเดียวกันเท่านั้น');
+  throw new Error('โหมดใช้ฟรีต้องรัน API ในเครื่องนี้ และใช้เว็บไซต์ HTTPS เมื่อผ่าน tunnel');
 if (
   production &&
   (!process.env.DATABASE_URL ||
