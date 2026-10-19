@@ -10,7 +10,7 @@ const publicMember = (row) =>
     id: row.id,
     name: row.name,
     email: row.email,
-    role: row.role,
+    role: row.role === 'guest' ? 'guest' : 'member',
     avatar: row.avatar,
     appearance: resolveAppearance(row.appearance, row.id),
     status: row.status,
@@ -45,11 +45,12 @@ export function createStore(connectionString, retentionDays = 30) {
     const rows = await db.unsafe('SELECT * FROM assemble.members ORDER BY created_at');
     memberCache.clear();
     for (const row of rows) cacheMember(row);
-    return members();
+    return [...memberCache.values()];
   }
 
   async function ready() {
     await db.unsafe('SELECT 1');
+    await db.unsafe("UPDATE assemble.members SET role='member' WHERE role='admin'");
     await refreshMembers();
   }
 
@@ -75,7 +76,7 @@ export function createStore(connectionString, retentionDays = 30) {
           member.name.normalize('NFKC').toLowerCase() === name.normalize('NFKC').toLowerCase(),
       );
     },
-    async upsertMember({ identity, name, email = '', role = 'member', maxMembers = 50 }) {
+    async upsertMember({ identity, name, email = '', maxMembers = 50 }) {
       const row = await db.begin(async (tx) => {
         // Serialize first-login and capacity checks across concurrent OIDC callbacks.
         await tx.unsafe('SELECT pg_advisory_xact_lock(560249822354)');
@@ -87,7 +88,7 @@ export function createStore(connectionString, retentionDays = 30) {
         if (existing[0]) {
           const updated = await tx.unsafe(
             'UPDATE assemble.members SET name=$1,email=$2,role=$3 WHERE id=$4 RETURNING *',
-            [name, email, role, existing[0].id],
+            [name, email, 'member', existing[0].id],
           );
           return updated[0];
         }
@@ -107,7 +108,7 @@ export function createStore(connectionString, retentionDays = 30) {
             identity,
             name,
             email,
-            role,
+            'member',
             colors[Number(totalRows[0].count) % colors.length],
             Date.now(),
           ],
@@ -153,24 +154,6 @@ export function createStore(connectionString, retentionDays = 30) {
           throw new Error('ที่นั่งนี้มีเจ้าของแล้ว เลือกที่นั่งอื่นได้เลย');
         throw error;
       }
-    },
-    async revoke(id) {
-      const result = await db.begin(async (tx) => {
-        const members = await tx.unsafe(
-          'UPDATE assemble.members SET revoked=true,seat=NULL WHERE id=$1 RETURNING *',
-          [id],
-        );
-        await tx.unsafe('DELETE FROM assemble.sessions WHERE member_id=$1', [id]);
-        const invites = await tx.unsafe(
-          'UPDATE assemble.invites SET revoked=true WHERE creator_id=$1 RETURNING id',
-          [id],
-        );
-        return { member: members[0], inviteIds: new Set(invites.map((invite) => invite.id)) };
-      });
-      if (result.member) cacheMember(result.member);
-      clearSessions(
-        (session) => session.memberId === id || result.inviteIds.has(session.inviteId),
-      );
     },
     async newSession({
       memberId = null,
@@ -302,28 +285,18 @@ export function createStore(connectionString, retentionDays = 30) {
         ? { id: rows[0].id, roomId: rows[0].room_id, expiresAt: Number(rows[0].expires_at) }
         : null;
     },
-    async invites(creatorId, admin = false) {
-      const rows = admin
-        ? await db.unsafe(
-            'SELECT id,room_id AS "roomId",creator_id AS "creatorId",expires_at AS "expiresAt",revoked FROM assemble.invites WHERE expires_at>$1 ORDER BY expires_at',
-            [Date.now()],
-          )
-        : await db.unsafe(
-            'SELECT id,room_id AS "roomId",creator_id AS "creatorId",expires_at AS "expiresAt",revoked FROM assemble.invites WHERE creator_id=$1 AND expires_at>$2 ORDER BY expires_at',
-            [creatorId, Date.now()],
-          );
+    async invites(creatorId) {
+      const rows = await db.unsafe(
+        'SELECT id,room_id AS "roomId",creator_id AS "creatorId",expires_at AS "expiresAt",revoked FROM assemble.invites WHERE creator_id=$1 AND expires_at>$2 ORDER BY expires_at',
+        [creatorId, Date.now()],
+      );
       return rows.map((row) => ({ ...row, expiresAt: Number(row.expiresAt) }));
     },
-    async revokeInvite(id, creatorId, admin = false) {
-      const rows = admin
-        ? await db.unsafe(
-            'UPDATE assemble.invites SET revoked=true WHERE id=$1 AND revoked=false RETURNING id',
-            [id],
-          )
-        : await db.unsafe(
-            'UPDATE assemble.invites SET revoked=true WHERE id=$1 AND creator_id=$2 AND revoked=false RETURNING id',
-            [id, creatorId],
-          );
+    async revokeInvite(id, creatorId) {
+      const rows = await db.unsafe(
+        'UPDATE assemble.invites SET revoked=true WHERE id=$1 AND creator_id=$2 AND revoked=false RETURNING id',
+        [id, creatorId],
+      );
       if (rows[0]) clearSessions((session) => session.inviteId === id);
       return rows.length;
     },

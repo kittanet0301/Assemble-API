@@ -49,13 +49,11 @@ export function installAuth(app, { store, config, sessionCookie, getUser, verify
     const name = typeof req.body.name === 'string' ? req.body.name.trim().slice(0, 40) : '';
     if (!name) return res.status(400).json({ error: 'ใส่ชื่อที่อยากให้เพื่อนร่วมงานเห็นก่อนครับ' });
     try {
-      const first = store.members().filter((m) => !m.revoked).length === 0;
       const existing = await store.demoIdentity(name);
       const member = await store.upsertMember({
         identity: existing?.identity ?? `demo:${randomUUID()}`,
         name,
         email: '',
-        role: existing?.role ?? (first ? 'admin' : 'member'),
         maxMembers: config.maxMembers,
       });
       sessionCookie(res, await store.newSession({ memberId: member.id }));
@@ -136,7 +134,6 @@ export function installAuth(app, { store, config, sessionCookie, getUser, verify
         identity: `${claims.iss}:${claims.sub}`,
         email,
         name: String(claims.name ?? email.split('@')[0]).slice(0, 60),
-        role: config.adminEmails.includes(email) ? 'admin' : 'member',
         maxMembers: config.maxMembers,
       });
       sessionCookie(res, await store.newSession({ memberId: member.id }));

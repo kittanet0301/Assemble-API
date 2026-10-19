@@ -45,11 +45,6 @@ const config = {
     .split(',')
     .map((value) => value.trim())
     .filter(Boolean),
-  adminEmails: (process.env.ADMIN_EMAILS ?? '')
-    .toLowerCase()
-    .split(',')
-    .map((value) => value.trim())
-    .filter(Boolean),
   maxMembers: number('MAX_MEMBERS', 50, 50),
   maxOnline: number('MAX_ONLINE', 20, 20),
   roomCapacity: number('ROOM_CAPACITY', 8, 8),
@@ -86,7 +81,6 @@ if (
   production &&
   (!process.env.DATABASE_URL ||
     !config.domains.length ||
-    !config.adminEmails.length ||
     process.env.AUTH_MODE !== 'oidc' ||
     !oidcConfigured ||
     !process.env.SESSION_SECRET ||
@@ -96,7 +90,7 @@ if (
     !wsOrigin.startsWith('https:'))
 )
   throw new Error(
-    'Production ต้องกำหนด DATABASE_URL, HTTPS PUBLIC_ORIGIN, HTTPS WS_PUBLIC_ORIGIN, ALLOWED_DOMAINS, ADMIN_EMAILS, SESSION_SECRET อย่างน้อย 32 ตัวอักษร และตั้ง AUTH_MODE=oidc พร้อมค่า OIDC provider ให้ครบ',
+    'Production ต้องกำหนด DATABASE_URL, HTTPS PUBLIC_ORIGIN, HTTPS WS_PUBLIC_ORIGIN, ALLOWED_DOMAINS, SESSION_SECRET อย่างน้อย 32 ตัวอักษร และตั้ง AUTH_MODE=oidc พร้อมค่า OIDC provider ให้ครบ',
   );
 
 const secret = process.env.SESSION_SECRET || randomBytes(32).toString('hex');
@@ -261,7 +255,7 @@ app.post('/api/invites/accept', verifyOrigin, async (req, res) => {
   res.json({ ok: true });
 });
 app.get('/api/invites', requireUser, requireMember, async (req, res) =>
-  res.json({ invites: await store.invites(req.user.id, req.user.role === 'admin') }),
+  res.json({ invites: await store.invites(req.user.id) }),
 );
 app.post('/api/invites', verifyOrigin, requireUser, requireMember, async (req, res) => {
   if (!ROOMS.some((room) => room.id === req.body.roomId))
@@ -274,19 +268,9 @@ app.post('/api/invites', verifyOrigin, requireUser, requireMember, async (req, r
   });
 });
 app.delete('/api/invites/:id', verifyOrigin, requireUser, requireMember, async (req, res) => {
-  if (!(await store.revokeInvite(req.params.id, req.user.id, req.user.role === 'admin')))
+  if (!(await store.revokeInvite(req.params.id, req.user.id)))
     return res.status(404).json({ error: 'ไม่พบคำเชิญของคุณ' });
   office.tick(0);
-  res.json({ ok: true });
-});
-app.post('/api/members/:id/revoke', verifyOrigin, requireUser, async (req, res) => {
-  if (req.user.role !== 'admin') return res.status(403).json({ error: 'เฉพาะผู้ดูแลเท่านั้น' });
-  if (req.params.id === req.user.id)
-    return res.status(400).json({ error: 'ผู้ดูแลถอนสิทธิ์ตัวเองไม่ได้' });
-  if (!store.member(req.params.id)) return res.status(404).json({ error: 'ไม่พบสมาชิก' });
-  await store.revoke(req.params.id);
-  office.tick(0);
-  office.broadcast();
   res.json({ ok: true });
 });
 app.post('/api/meeting/token', verifyOrigin, requireUser, async (req, res) => {

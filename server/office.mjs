@@ -99,7 +99,6 @@ export class Office {
               status: m.status,
               seat: m.seat,
               role: m.role,
-              ...(forPeer.user.role === 'admin' ? { email: m.email } : {}),
             }));
     return {
       type: 'snapshot',
