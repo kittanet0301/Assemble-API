@@ -1,0 +1,22 @@
+{
+  "name": "assemble-api",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24.15.0"
+  },
+  "scripts": {
+    "dev": "node --watch server/index.mjs",
+    "start": "node server/index.mjs --production",
+    "install:launch-agent": "node scripts/install-launchd.mjs",
+    "import:sqlite": "node scripts/import-sqlite.mjs"
+  },
+  "dependencies": {
+    "express": "^5.1.0",
+    "livekit-server-sdk": "^2.14.0",
+    "openid-client": "^6.8.1",
+    "postgres": "3.4.9",
+    "ws": "^8.18.3"
+  }
+}

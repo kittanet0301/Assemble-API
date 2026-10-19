@@ -1,0 +1,10 @@
+node_modules/
+.pnpm-store/
+dist/
+data/
+assets/
+public/
+research/
+docs/preview/
+pnpm-lock.yaml
+shared/zep-catalog.json
